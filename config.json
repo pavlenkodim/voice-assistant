@@ -1,0 +1,34 @@
+[
+  {
+    "trigger": "открой chrome",
+    "action": "open chrome"
+  },
+  {
+    "trigger": "запусти youtube",
+    "action": "url https://youtube.com"
+  },
+  {
+    "trigger": "напиши привет",
+    "action": "type Привет, как дела?"
+  },
+  {
+    "trigger": "громкость выше",
+    "action": "hotkey volumeup"
+  },
+  {
+    "trigger": "громкость ниже",
+    "action": "hotkey volumedown"
+  },
+  {
+    "trigger": "отключи звук",
+    "action": "hotkey volumemute"
+  },
+  {
+    "trigger": "открой spotify",
+    "action": "open spotify"
+  },
+  {
+    "trigger": "открой курсор",
+    "action": "cursor"
+  }
+]
