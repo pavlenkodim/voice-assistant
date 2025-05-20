@@ -8,9 +8,15 @@ import sys
 import string
 import pyautogui
 import keyboard
+import warnings
+import torch
 from dotenv import load_dotenv
 from recognizer import SpeechRecognizer
 from executor import CommandExecutor
+
+# Игнорируем предупреждения, которые могут возникать в новых версиях Python
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -40,8 +46,8 @@ class VoiceAssistant:
         Инициализация голосового ассистента.
         
         Args:
-            use_whisper (bool): Использовать Whisper вместо Google Speech Recognition
-            whisper_model (str): Размер модели Whisper
+            use_whisper (bool): Использовать faster-whisper вместо Google Speech Recognition
+            whisper_model (str): Размер модели faster-whisper
         """
         self.recognizer = SpeechRecognizer(use_whisper=use_whisper, whisper_model=whisper_model)
         self.executor = CommandExecutor()
@@ -50,7 +56,10 @@ class VoiceAssistant:
         self.dictation_mode = False
         
         # Настройка обработчика сигналов для корректного завершения
-        signal.signal(signal.SIGINT, self._signal_handler)
+        try:
+            signal.signal(signal.SIGINT, self._signal_handler)
+        except Exception as e:
+            print(f"Предупреждение: Не удалось настроить обработчик сигналов: {e}")
     
     def start(self):
         """Запуск основного цикла голосового ассистента."""
@@ -208,8 +217,15 @@ def main():
     
     # Создание и запуск голосового ассистента
     print("Инициализация голосового ассистента...")
-    # Используем Google Speech Recognition вместо Whisper из-за проблем с временными файлами
-    assistant = VoiceAssistant(use_whisper=False)
+    
+    # Определяем, есть ли аппаратное ускорение для faster-whisper
+    has_cuda = torch.cuda.is_available() if 'torch' in sys.modules else False
+    
+    # По умолчанию используем Google Speech Recognition, если нет CUDA
+    use_whisper = has_cuda
+    
+    # Используем соответствующую модель распознавания
+    assistant = VoiceAssistant(use_whisper=use_whisper, whisper_model="base")
     assistant.start()
 
 

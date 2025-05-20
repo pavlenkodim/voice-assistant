@@ -2,9 +2,14 @@ import os
 import tempfile
 import time
 import speech_recognition as sr
-import whisper
+from faster_whisper import WhisperModel
 import numpy as np
 import torch
+import warnings
+
+# Игнорируем предупреждения, которые могут возникать в новых версиях Python
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 class SpeechRecognizer:
     """Класс для распознавания речи с использованием различных моделей."""
@@ -14,18 +19,32 @@ class SpeechRecognizer:
         Инициализация распознавателя речи.
         
         Args:
-            use_whisper (bool): Использовать Whisper вместо Google Speech Recognition
-            whisper_model (str): Размер модели Whisper ("tiny", "base", "small", "medium", "large")
-            language (str): Язык распознавания (для Whisper и Google Speech)
+            use_whisper (bool): Использовать faster-whisper вместо Google Speech Recognition
+            whisper_model (str): Размер модели faster-whisper ("tiny", "base", "small", "medium", "large")
+            language (str): Язык распознавания (для faster-whisper и Google Speech)
         """
         self.recognizer = sr.Recognizer()
         self.use_whisper = use_whisper
         self.language = language
         
-        # Инициализация модели Whisper, если она выбрана
+        # Инициализация модели faster-whisper, если она выбрана
         if use_whisper:
-            self.whisper_model = whisper.load_model(whisper_model)
-            print(f"Модель Whisper '{whisper_model}' загружена")
+            try:
+                # Определяем наличие CUDA для ускорения
+                compute_type = "float16" if torch.cuda.is_available() else "int8"
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                
+                # Загружаем модель faster-whisper
+                self.whisper_model = WhisperModel(
+                    whisper_model, 
+                    device=device, 
+                    compute_type=compute_type
+                )
+                print(f"Модель faster-whisper '{whisper_model}' загружена на устройстве {device} с типом {compute_type}")
+            except Exception as e:
+                print(f"Ошибка загрузки модели faster-whisper: {e}")
+                print("Переключение на Google Speech Recognition")
+                self.use_whisper = False
     
     def listen(self, timeout=5, phrase_time_limit=None):
         """
@@ -64,7 +83,7 @@ class SpeechRecognizer:
             str: Распознанный текст или None в случае ошибки
         """
         if self.use_whisper:
-            return self._recognize_with_whisper(audio)
+            return self._recognize_with_faster_whisper(audio)
         else:
             return self._recognize_with_google(audio)
     
@@ -81,40 +100,46 @@ class SpeechRecognizer:
             print(f"Ошибка сервиса Google Speech Recognition: {e}")
             return None
     
-    def _recognize_with_whisper(self, audio):
-        """Распознавание с помощью локальной модели Whisper."""
+    def _recognize_with_faster_whisper(self, audio):
+        """Распознавание с помощью локальной модели faster-whisper."""
         try:
-            # Создаем имя для временного файла
+            # Создаем уникальное имя для временного файла
             temp_dir = tempfile.gettempdir()
-            temp_filename = os.path.join(temp_dir, f"whisper_audio_{int(time.time())}.wav")
+            temp_filename = os.path.join(temp_dir, f"whisper_audio_{int(time.time())}_{os.getpid()}.wav")
             
             # Сохраняем аудио во временный файл
             with open(temp_filename, 'wb') as temp_audio:
                 temp_audio.write(audio.get_wav_data())
             
-            # Даем системе время на закрытие файла
-            time.sleep(0.5)
-            
             # Проверяем, существует ли файл
             if not os.path.exists(temp_filename):
                 raise FileNotFoundError(f"Временный файл не был создан: {temp_filename}")
             
-            # Распознаем с помощью Whisper
-            result = self.whisper_model.transcribe(
+            # Распознаем с помощью faster-whisper
+            # Новый API для faster-whisper
+            segments, info = self.whisper_model.transcribe(
                 temp_filename,
                 language=self.language,
-                fp16=torch.cuda.is_available()
+                beam_size=5,
+                word_timestamps=False
             )
             
-            # Удаляем временный файл
-            os.remove(temp_filename)
+            # Собираем текст из всех сегментов
+            text = " ".join([segment.text for segment in segments])
             
-            text = result["text"].strip()
-            print(f"Распознано (Whisper): {text}")
-            return text.lower()
+            # Удаляем временный файл
+            try:
+                os.remove(temp_filename)
+            except Exception as e:
+                print(f"Предупреждение: Не удалось удалить временный файл: {e}")
+            
+            print(f"Распознано (faster-whisper): {text}")
+            return text.lower().strip()
         except Exception as e:
-            print(f"Ошибка при распознавании Whisper: {e}")
-            return None
+            print(f"Ошибка при распознавании faster-whisper: {e}")
+            # Пробуем запасной вариант с Google
+            print("Попытка распознать с помощью Google Speech...")
+            return self._recognize_with_google(audio)
 
 
 # Пример использования

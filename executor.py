@@ -13,6 +13,9 @@ import pyttsx3
 # Загрузка переменных окружения из .env файла
 load_dotenv()
 
+# Инициализация клиента OpenAI
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 class CommandExecutor:
     """Класс для исполнения голосовых команд и взаимодействия с GPT."""
     
@@ -25,9 +28,6 @@ class CommandExecutor:
         """
         self.commands = self._load_commands(config_file)
         self.config_file = config_file
-        
-        # Настройка OpenAI API
-        openai.api_key = os.getenv("OPENAI_API_KEY")
         
         # Инициализация движка синтеза речи
         self.tts_engine = pyttsx3.init()
@@ -256,8 +256,8 @@ class CommandExecutor:
         try:
             print(f"Отправка запроса в GPT: {query}")
             
-            # Вызов API OpenAI
-            response = openai.ChatCompletion.create(
+            # Вызов API OpenAI с новой версией API
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",  # или "gpt-4" для более сложных запросов
                 messages=[
                     {"role": "system", "content": "Ты - голосовой ассистент, который отвечает кратко и по делу. Ты работаешь с программистом и должен давать точные технические ответы."},
@@ -266,7 +266,7 @@ class CommandExecutor:
                 max_tokens=500
             )
             
-            # Получение ответа
+            # Получение ответа (новая структура ответа API)
             answer = response.choices[0].message.content.strip()
             print(f"Ответ GPT: {answer}")
             
